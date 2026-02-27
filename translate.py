@@ -13,6 +13,6 @@ async def translation_pipeline(text: str, source_lang: str = "en-IN", target_lan
         source_language_code=source_lang,
         target_language_code=target_lang,
         speaker_gender="Male",
-        model="sarvam-translate:v1"# "mayura:v1"
+        model="mayura:v1"
     )
     return response.translated_text

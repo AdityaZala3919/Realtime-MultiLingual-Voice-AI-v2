@@ -1,525 +1,695 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Streaming Chatbot - Dual Output</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Voice Agent</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎙️</text></svg>">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            padding: 20px;
-        }
+    :root {
+      --bg:          #0d0d1a;
+      --surface:     #16162a;
+      --surface2:    #1e1e36;
+      --border:      #2a2a4a;
+      --accent:      #667eea;
+      --accent2:     #f093fb;
+      --text:        #e0e0f0;
+      --text-muted:  #7070a0;
+      --user-bubble: #1a2a5e;
+      --bot-bubble:  #1e1e36;
+      --green:       #4caf50;
+      --red:         #f44336;
+      --orange:      #ff9800;
+      --blue:        #2196f3;
+    }
 
-        .header {
-            background: white;
-            border-radius: 12px;
-            padding: 20px;
-            margin-bottom: 20px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-        }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
 
-        .header h1 {
-            color: #667eea;
-            margin-bottom: 10px;
-            font-size: 28px;
-        }
+    /* Header */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 24px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .header-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 18px;
+      font-weight: 700;
+    }
+    .status-pill {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 13px;
+      color: var(--text-muted);
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 99px;
+      padding: 5px 14px;
+      transition: color .25s;
+    }
+    .status-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      transition: background .25s;
+      flex-shrink: 0;
+    }
+    .status-dot.idle       { background: var(--text-muted); }
+    .status-dot.listening  { background: var(--green); }
+    .status-dot.speaking   { background: var(--red);    animation: pulse-dot 0.9s ease-in-out infinite; }
+    .status-dot.processing { background: var(--orange); animation: spin-dot  1.2s linear infinite; }
+    .status-dot.responding { background: var(--blue);   animation: pulse-dot 1.4s ease-in-out infinite; }
 
-        .header p {
-            color: #666;
-            font-size: 14px;
-        }
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.3; }
+    }
+    @keyframes spin-dot {
+      0%   { transform: scale(1); }
+      50%  { transform: scale(1.5); }
+      100% { transform: scale(1); }
+    }
 
-        .controls {
-            display: flex;
-            gap: 15px;
-            margin-bottom: 15px;
-            flex-wrap: wrap;
-            align-items: center;
-        }
+    /* Conversation */
+    #conversation {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px 0;
+      scroll-behavior: smooth;
+    }
+    #conversation::-webkit-scrollbar { width: 6px; }
+    #conversation::-webkit-scrollbar-track { background: transparent; }
+    #conversation::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
-        .input-group {
-            display: flex;
-            gap: 10px;
-            flex: 1;
-            min-width: 300px;
-        }
+    .turn {
+      display: flex;
+      padding: 6px 24px;
+      animation: fadeUp .2s ease;
+    }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .turn.user { justify-content: flex-end; }
+    .turn.bot  { justify-content: flex-start; }
 
-        input[type="text"] {
-            flex: 1;
-            padding: 12px 15px;
-            border: 2px solid #e0e0e0;
-            border-radius: 8px;
-            font-size: 14px;
-            transition: border-color 0.3s;
-        }
+    .bubble {
+      max-width: 70%;
+      padding: 11px 16px;
+      border-radius: 18px;
+      font-size: 15px;
+      line-height: 1.6;
+      word-break: break-word;
+    }
+    .turn.user .bubble {
+      background: var(--user-bubble);
+      border-bottom-right-radius: 4px;
+      color: #d0dfff;
+    }
+    .turn.bot .bubble {
+      background: var(--bot-bubble);
+      border: 1px solid var(--border);
+      border-bottom-left-radius: 4px;
+    }
+    .bubble-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: .5px;
+      margin-bottom: 5px;
+      opacity: .5;
+      text-transform: uppercase;
+    }
+    .turn.user .bubble-label { color: #99aaff; }
+    .turn.bot  .bubble-label { color: var(--accent2); }
+    .bubble-text { white-space: pre-wrap; }
 
-        input[type="text"]:focus {
-            outline: none;
-            border-color: #667eea;
-        }
+    /* Streaming cursor */
+    .bubble.streaming .bubble-text::after {
+      content: "\25AE";
+      animation: blink-cursor .8s steps(1) infinite;
+      margin-left: 1px;
+      opacity: .7;
+    }
+    @keyframes blink-cursor {
+      0%, 49% { opacity: .7; }
+      50%, 100% { opacity: 0; }
+    }
+    .bubble.interrupted .bubble-text { opacity: .6; }
+    .bubble.interrupted .bubble-text::after {
+      content: " \21a9 interrupted";
+      font-size: 11px;
+      color: var(--text-muted);
+      font-style: italic;
+      animation: none;
+      opacity: 1;
+    }
 
-        button {
-            padding: 12px 24px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 600;
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
+    /* Empty state */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      gap: 14px;
+      color: var(--text-muted);
+      font-size: 14px;
+      user-select: none;
+      padding: 40px;
+      text-align: center;
+    }
+    .empty-state .big-icon { font-size: 52px; }
 
-        button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
-        }
+    /* Bottom bar */
+    .bottom-bar {
+      flex-shrink: 0;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      padding: 18px 24px 22px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+    }
+    .mic-row {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+    }
 
-        button:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-            transform: none;
-        }
+    /* Mic orb */
+    .mic-orb {
+      width: 72px; height: 72px;
+      border-radius: 50%;
+      border: none;
+      cursor: default;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 30px;
+      background: linear-gradient(135deg, var(--accent), #764ba2);
+      box-shadow: 0 4px 20px rgba(102,126,234,.35);
+      transition: background .25s, box-shadow .25s;
+      position: relative;
+    }
+    .mic-orb.speaking {
+      background: linear-gradient(135deg, #f5576c, #ff6a88);
+      box-shadow: 0 4px 25px rgba(245,87,108,.5);
+    }
+    .mic-orb.speaking::before {
+      content: '';
+      position: absolute;
+      inset: -6px;
+      border-radius: 50%;
+      border: 2px solid rgba(245,87,108,.4);
+      animation: ring-pulse 1s ease-out infinite;
+    }
+    @keyframes ring-pulse {
+      0%   { transform: scale(1);    opacity: 1; }
+      100% { transform: scale(1.35); opacity: 0; }
+    }
 
-        select {
-            padding: 10px 15px;
-            border: 2px solid #e0e0e0;
-            border-radius: 8px;
-            font-size: 14px;
-            background: white;
-            cursor: pointer;
-            transition: border-color 0.3s;
-        }
+    /* Audio wave bars */
+    .wave-bars {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      height: 32px;
+      opacity: 0;
+      transition: opacity .3s;
+    }
+    .wave-bars.active { opacity: 1; }
+    .wave-bars .bar {
+      width: 4px;
+      border-radius: 2px;
+      background: var(--accent);
+      height: 6px;
+      transform-origin: bottom;
+    }
+    .wave-bars.active .bar:nth-child(1) { animation: wave .8s ease-in-out 0.0s infinite; }
+    .wave-bars.active .bar:nth-child(2) { animation: wave .8s ease-in-out 0.1s infinite; }
+    .wave-bars.active .bar:nth-child(3) { animation: wave .8s ease-in-out 0.2s infinite; }
+    .wave-bars.active .bar:nth-child(4) { animation: wave .8s ease-in-out 0.3s infinite; }
+    .wave-bars.active .bar:nth-child(5) { animation: wave .8s ease-in-out 0.15s infinite; }
+    @keyframes wave {
+      0%, 100% { height: 6px;  }
+      50%       { height: 26px; }
+    }
 
-        select:focus {
-            outline: none;
-            border-color: #667eea;
-        }
+    /* Buttons */
+    .btn-row { display: flex; gap: 10px; }
+    .btn {
+      padding: 7px 18px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      color: var(--text-muted);
+      font-size: 13px;
+      cursor: pointer;
+      transition: background .15s, color .15s;
+    }
+    .btn:hover { background: var(--border); color: var(--text); }
+    .btn.danger:hover {
+      background: rgba(244,67,54,.15);
+      border-color: var(--red);
+      color: var(--red);
+    }
 
-        .status {
-            padding: 10px 15px;
-            border-radius: 6px;
-            font-size: 13px;
-            display: none;
-        }
-
-        .status.show {
-            display: block;
-        }
-
-        .status.success {
-            background: #d4edda;
-            color: #155724;
-        }
-
-        .status.error {
-            background: #f8d7da;
-            color: #721c24;
-        }
-
-        .container {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-            flex: 1;
-            min-height: 0;
-        }
-
-        .panel {
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
-
-        .panel-header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 15px 20px;
-            font-weight: 600;
-            font-size: 16px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .panel-header.original {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        }
-
-        .panel-header.translated {
-            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-        }
-
-        .panel-content {
-            flex: 1;
-            overflow-y: auto;
-            padding: 20px;
-            background: #f9f9f9;
-        }
-
-        .panel-content.empty {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #999;
-            font-style: italic;
-        }
-
-        .chunk {
-            margin-bottom: 12px;
-            padding: 12px;
-            background: white;
-            border-left: 4px solid #667eea;
-            border-radius: 6px;
-            line-height: 1.6;
-            word-wrap: break-word;
-        }
-
-        .panel-header.translated ~ .panel-content .chunk {
-            border-left-color: #f5576c;
-        }
-
-        .chunk-count {
-            font-size: 11px;
-            color: #999;
-            margin-top: 6px;
-            font-weight: 500;
-        }
-
-        .chunk-text {
-            color: #333;
-            font-size: 14px;
-        }
-
-        @media (max-width: 1024px) {
-            .container {
-                grid-template-columns: 1fr;
-            }
-        }
-
-        .scrollbar::-webkit-scrollbar {
-            width: 8px;
-        }
-
-        .scrollbar::-webkit-scrollbar-track {
-            background: #f1f1f1;
-        }
-
-        .scrollbar::-webkit-scrollbar-thumb {
-            background: #888;
-            border-radius: 4px;
-        }
-
-        .scrollbar::-webkit-scrollbar-thumb:hover {
-            background: #555;
-        }
-
-        .panel-content {
-            scrollbar-width: thin;
-            scrollbar-color: #888 #f1f1f1;
-        }
-    </style>
+    #sessionBtn {
+      padding: 10px 30px;
+      border-radius: 99px;
+      border: none;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      background: linear-gradient(135deg, var(--accent), #764ba2);
+      color: white;
+      box-shadow: 0 4px 14px rgba(102,126,234,.35);
+      transition: opacity .2s, transform .15s;
+    }
+    #sessionBtn:hover  { opacity: .9; }
+    #sessionBtn:active { transform: scale(.97); }
+    #sessionBtn.active {
+      background: linear-gradient(135deg, #f5576c, #c0392b);
+      box-shadow: 0 4px 14px rgba(245,87,108,.35);
+    }
+  </style>
 </head>
 <body>
-    <div class="header">
-        <h1>🚀 Streaming Chatbot - Dual Output View</h1>
-        <p>Upload audio, get real-time LLM output on the left, Translated output on the right</p>
+
+  <header>
+    <div class="header-title">
+      <span>&#127897;&#65039;</span> Voice Agent
     </div>
-
-    <div style="background: white; border-radius: 12px; padding: 20px; margin-bottom: 20px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);">
-        <div class="controls">
-            <div class="input-group">
-                <input 
-                    type="file" 
-                    id="audioInput" 
-                    accept="audio/*"
-                >
-                <button id="sendBtn" onclick="sendAudio()">Send Audio</button>
-            </div>
-        </div>
-        <div class="controls" style="margin-top: 5px;">
-            <div style="display: flex; align-items: center; gap: 10px;">
-                <span style="font-size: 14px; color: #555;">🔊 Audio:</span>
-                <span id="audioStatus" style="font-size: 13px; color: #999;">Idle</span>
-                <button id="stopAudioBtn" onclick="stopAudio()" style="padding: 6px 12px; font-size: 12px; background: linear-gradient(135deg, #e74c3c, #c0392b);">Stop Audio</button>
-            </div>
-        </div>
-        <div class="status" id="statusMessage"></div>
+    <div class="status-pill">
+      <div class="status-dot idle" id="statusDot"></div>
+      <span id="statusLabel">Offline</span>
     </div>
+  </header>
 
-    <div class="container">
-        <div class="panel">
-            <div class="panel-header original">
-                📝 Original LLM Output
-            </div>
-            <div class="panel-content scrollbar empty" id="originalContainer">
-                Waiting for LLM response...
-            </div>
-        </div>
-
-        <div class="panel">
-            <div class="panel-header translated">
-                🌐 Translated Output
-            </div>
-            <div class="panel-content scrollbar empty" id="translatedContainer">
-                Waiting for translation...
-            </div>
-        </div>
+  <div id="conversation">
+    <div class="empty-state" id="emptyState">
+      <div class="big-icon">&#127897;&#65039;</div>
+      <div>Press <strong>Start Session</strong> and begin speaking.</div>
+      <div style="font-size:12px; color:var(--text-muted)">
+        The agent listens continuously and responds naturally.<br/>
+        Just start talking to interrupt a response.
+      </div>
     </div>
+  </div>
 
-    <script>
-        const WS_URL = "ws://localhost:8000/ws/chat";
-        let ws = null;
-        let audioCtx = null;
-        let nextPlaybackTime = 0;
-        let audioQueue = [];
-        let isPlayingQueue = false;
+  <div class="bottom-bar">
+    <div class="mic-row">
+      <div class="wave-bars" id="waveBars">
+        <div class="bar"></div><div class="bar"></div><div class="bar"></div>
+        <div class="bar"></div><div class="bar"></div>
+      </div>
+      <div class="mic-orb" id="micOrb">&#127908;</div>
+      <div style="width:56px"></div>
+    </div>
+    <button id="sessionBtn" onclick="toggleSession()">Start Session</button>
+    <div class="btn-row">
+      <button class="btn danger" onclick="clearConversation()">Clear</button>
+    </div>
+  </div>
 
-        // Get or create AudioContext
-        function getAudioContext() {
-            if (!audioCtx) {
-                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            }
-            return audioCtx;
-        }
+<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.14.0/dist/ort.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@ricky0123/vad-web@0.0.22/dist/bundle.min.js"></script>
+<script>
+(() => {
+  const WS_URL             = `wss://golden-nonanimated-mose.ngrok-free.dev/ws/agent`;
+  
+  //const WS_URL             = `ws://${location.hostname}:8000/ws/agent`;
 
-        // Resume audio context if suspended (browser autoplay policy)
-        async function resumeAudioContext() {
-            const ctx = getAudioContext();
-            if (ctx.state === 'suspended') {
-                await ctx.resume();
-            }
-        }
+  const conversationEl = document.getElementById("conversation");
+  const emptyStateEl   = document.getElementById("emptyState");
+  const statusDot      = document.getElementById("statusDot");
+  const statusLabel    = document.getElementById("statusLabel");
+  const sessionBtn     = document.getElementById("sessionBtn");
+  const micOrb         = document.getElementById("micOrb");
+  const waveBars       = document.getElementById("waveBars");
 
-        function updateAudioStatus(text) {
-            document.getElementById('audioStatus').textContent = text;
-        }
+  let ws            = null;
+  let micVad        = null;
+  let sessionActive = false;
 
-        // Process queued audio buffers
-        async function playFromQueue() {
-            if (isPlayingQueue || audioQueue.length === 0) {
-                return;
-            }
+  // Playback (MediaSource streaming, inspired by test.html)
+  let audioEl      = null;
+  let mediaSource  = null;
+  let sourceBuffer = null;
+  let bufferQueue  = [];
+  let isAppending  = false;
+  let streamDone   = false;
 
-            isPlayingQueue = true;
+  // Bubble state
+  let currentBotBubble     = null;
+  let currentBotBubbleText = "";
 
-            while (audioQueue.length > 0) {
-                const audioBuffer = audioQueue.shift();
-                const ctx = getAudioContext();
+  // ── Status ───────────────────────────────────────────────
+  function setStatus(label, dotClass) {
+    statusLabel.textContent = label;
+    statusDot.className     = `status-dot ${dotClass}`;
+  }
 
-                const source = ctx.createBufferSource();
-                source.buffer = audioBuffer;
-                source.connect(ctx.destination);
+  // ── Audio playback (MediaSource) ─────────────────────────────
+  function getAudioEl() {
+    if (!audioEl) {
+      audioEl = document.createElement('audio');
+      audioEl.style.display = 'none';
+      document.body.appendChild(audioEl);
+      audioEl.addEventListener('playing', () => {
+        waveBars.classList.add('active');
+        if (ws && ws.readyState === WebSocket.OPEN)
+          ws.send(JSON.stringify({ type: 'playback_started' }));
+      });
+      audioEl.addEventListener('ended', () => {
+        waveBars.classList.remove('active');
+        if (ws && ws.readyState === WebSocket.OPEN)
+          ws.send(JSON.stringify({ type: 'playback_ended' }));
+      });
+    }
+    return audioEl;
+  }
 
-                const currentTime = ctx.currentTime;
-                const startTime = Math.max(currentTime, nextPlaybackTime);
-                source.start(startTime);
-                nextPlaybackTime = startTime + audioBuffer.duration;
+  function resetMediaSource() {
+    if (mediaSource && mediaSource.readyState === 'open') {
+      try { mediaSource.endOfStream(); } catch(_) {}
+    }
+    mediaSource  = new MediaSource();
+    sourceBuffer = null;
+    bufferQueue  = [];
+    isAppending  = false;
+    streamDone   = false;
 
-                // Wait for the chunk to finish playing
-                await new Promise(resolve => {
-                    source.onended = resolve;
-                });
+    const el = getAudioEl();
+    el.src = URL.createObjectURL(mediaSource);
 
-                updateAudioStatus(`▶️ Playing... (Queue: ${audioQueue.length})`);
-            }
+    // Single reliable play trigger — fires when the browser has enough data
+    el.addEventListener('canplay', function onCanPlay() {
+      el.removeEventListener('canplay', onCanPlay);
+      el.play().catch(() => {});
+    });
 
-            isPlayingQueue = false;
-            updateAudioStatus(`✅ Done`);
-        }
+    mediaSource.addEventListener('sourceopen', () => {
+      const mime = 'audio/mpeg';
+      if (!MediaSource.isTypeSupported(mime)) {
+        console.warn('audio/mpeg not supported via MediaSource in this browser');
+        return;
+      }
+      sourceBuffer = mediaSource.addSourceBuffer(mime);
+      sourceBuffer.mode = 'sequence';
+      sourceBuffer.addEventListener('updateend', () => {
+        isAppending = false;
+        flushQueue();
+      });
+      // flush any chunks buffered before sourceopen fired
+      flushQueue();
+    }, { once: true });
+  }
 
-        // Decode and queue a single audio chunk
-        async function playAudioChunk(base64Audio) {
-            try {
-                await resumeAudioContext();
-                const ctx = getAudioContext();
+  function flushQueue() {
+    if (isAppending || !sourceBuffer || sourceBuffer.updating) return;
+    if (bufferQueue.length === 0) {
+      if (streamDone && mediaSource && mediaSource.readyState === 'open') {
+        try { mediaSource.endOfStream(); } catch(_) {}
+        waveBars.classList.remove('active');
+      }
+      return;
+    }
+    isAppending = true;
+    sourceBuffer.appendBuffer(bufferQueue.shift());
+  }
 
-                // Convert base64 to ArrayBuffer
-                const binaryString = atob(base64Audio);
-                const len = binaryString.length;
-                const bytes = new Uint8Array(len);
-                for (let i = 0; i < len; i++) {
-                    bytes[i] = binaryString.charCodeAt(i);
-                }
+  function appendAudioChunk(base64Audio) {
+    // Decode base64 → ArrayBuffer and push to MediaSource
+    const binary = atob(base64Audio);
+    const bytes  = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    bufferQueue.push(bytes.buffer);
+    flushQueue();
+  }
 
-                // Decode audio data
-                const audioBuffer = await ctx.decodeAudioData(bytes.buffer);
-                audioQueue.push(audioBuffer);
+  function stopAudio() {
+    const wasPlaying = audioEl && !audioEl.paused;
+    if (audioEl) {
+      audioEl.pause();
+      audioEl.src = '';
+    }
+    mediaSource  = null;
+    sourceBuffer = null;
+    bufferQueue  = [];
+    isAppending  = false;
+    streamDone   = false;
+    waveBars.classList.remove('active');
+    if (wasPlaying && ws && ws.readyState === WebSocket.OPEN)
+      ws.send(JSON.stringify({ type: 'playback_ended' }));
+  }
 
-                updateAudioStatus(`▶️ Playing... (Queue: ${audioQueue.length})`);
+  // ── Conversation bubbles ──────────────────────────────────
+  function hideEmpty() { emptyStateEl.style.display = "none"; }
 
-                // Start playing if not already playing
-                if (!isPlayingQueue) {
-                    playFromQueue();
-                }
-            } catch (err) {
-                console.error("Audio decode error:", err);
-                updateAudioStatus(`❌ Error - retrying...`);
-            }
-        }
+  function addUserBubble(text) {
+    hideEmpty();
+    finalizeBotBubble();
+    const turn      = document.createElement("div");
+    turn.className  = "turn user";
+    turn.innerHTML  = `<div class="bubble"><div class="bubble-label">You</div><div class="bubble-text">${esc(text)}</div></div>`;
+    conversationEl.appendChild(turn);
+    scrollBottom();
+  }
 
-        function stopAudio() {
-            audioQueue = [];
-            audioCtx = null;
-            isPlayingQueue = false;
-            nextPlaybackTime = 0;
-            updateAudioStatus("⏹️ Stopped");
-        }
+  function getOrCreateBotBubble() {
+    if (currentBotBubble) return currentBotBubble;
+    hideEmpty();
+    const turn   = document.createElement("div");
+    turn.className = "turn bot";
+    const bubble = document.createElement("div");
+    bubble.className = "bubble streaming";
+    bubble.innerHTML = `<div class="bubble-label">Agent</div><div class="bubble-text"></div>`;
+    turn.appendChild(bubble);
+    conversationEl.appendChild(turn);
+    currentBotBubble     = bubble;
+    currentBotBubbleText = "";
+    scrollBottom();
+    return bubble;
+  }
 
-        function resetAudioState() {
-            stopAudio();
-            updateAudioStatus("🔊 Idle");
-        }
+  function appendBotText(text) {
+    const bubble = getOrCreateBotBubble();
+    currentBotBubbleText += (currentBotBubbleText ? " " : "") + text;
+    bubble.querySelector(".bubble-text").textContent = currentBotBubbleText;
+    scrollBottom();
+  }
 
-        // Initialize WebSocket connection
-        function connectWebSocket() {
-            ws = new WebSocket(WS_URL);
+  function finalizeBotBubble(interrupted = false) {
+    if (!currentBotBubble) return;
+    currentBotBubble.classList.remove("streaming");
+    if (interrupted && currentBotBubbleText)
+      currentBotBubble.classList.add("interrupted");
+    currentBotBubble     = null;
+    currentBotBubbleText = "";
+  }
 
-            ws.onopen = () => {
-                console.log("WebSocket connected");
-            };
+  function clearConversation() {
+    conversationEl.innerHTML = "";
+    conversationEl.appendChild(emptyStateEl);
+    emptyStateEl.style.display = "";
+    finalizeBotBubble();
+    stopAudio();
+  }
 
-            ws.onmessage = async (event) => {
-                const data = JSON.parse(event.data);
+  function scrollBottom() { conversationEl.scrollTop = conversationEl.scrollHeight; }
+  function esc(s) {
+    const d = document.createElement("div");
+    d.textContent = s;
+    return d.innerHTML;
+  }
 
-                if (data.done) {
-                    console.log("Streaming complete");
-                    updateAudioStatus("✅ Done");
-                } else if (data.type === "original") {
-                    displayOriginalChunk(data);
-                } else if (data.type === "translated") {
-                    displayTranslatedChunk(data);
-                } else if (data.type === "audio_chunk") {
-                    // Play audio immediately as chunks arrive
-                    await playAudioChunk(data.audio);
-                }
-            };
+  // ── WebSocket ─────────────────────────────────────────────
+  function connectWS() {
+    ws = new WebSocket(WS_URL);
+    ws.binaryType = "arraybuffer";
+    ws.onopen = () => setStatus("Listening", "listening");
+    ws.onmessage = e => handleMsg(JSON.parse(e.data));
+    ws.onerror = () => setStatus("Connection error", "idle");
+    ws.onclose = () => { setStatus("Offline", "idle"); if (sessionActive) endSession(); };
+  }
 
-            ws.onerror = (error) => {
-                console.error("WebSocket error:", error);
-                showStatus("WebSocket connection error", "error");
-                updateAudioStatus("❌ Connection Error");
-            };
+  function handleMsg(msg) {
+    switch (msg.type) {
+      case "processing":
+        micOrb.classList.remove("speaking");
+        setStatus("Processing\u2026", "processing");
+        break;
+      case "transcript":
+        resetMediaSource();          // fresh MediaSource for each new turn
+        addUserBubble(msg.text);
+        setStatus("Thinking\u2026", "processing");
+        break;
+      case "bot_text":
+        setStatus("Responding\u2026", "responding");
+        appendBotText(msg.text);
+        break;
+      case "audio_chunk":
+        appendAudioChunk(msg.audio);
+        break;
+      case "interrupted":
+        stopAudio();
+        finalizeBotBubble(true);
+        setStatus("Listening", "listening");
+        break;
+      case "done":
+        // Signal end-of-stream so MediaSource finalises and audio plays to completion
+        streamDone = true;
+        flushQueue();
+        finalizeBotBubble(false);
+        setStatus("Listening", "listening");
+        break;
+      case "idle":
+        micOrb.classList.remove("speaking");
+        setStatus("Listening", "listening");
+        break;
+      case "error":
+        console.error("Server error:", msg.message);
+        setStatus("Error \u2014 listening", "listening");
+        break;
+    }
+  }
 
-            ws.onclose = () => {
-                console.log("WebSocket disconnected");
-            };
-        }
+  // ── WAV encoding (for Silero VAD output) ──────────────────
+  function encodeWAV(float32Pcm, sampleRate = 16000) {
+    const numFrames  = float32Pcm.length;
+    const numBytes   = numFrames * 2;
+    const buf        = new ArrayBuffer(44 + numBytes);
+    const view       = new DataView(buf);
 
-        function sendAudio() {
-            const audioInput = document.getElementById("audioInput");
-            const file = audioInput.files[0];
-            const originalContainer = document.getElementById("originalContainer");
-            const translatedContainer = document.getElementById("translatedContainer");
-            const sendBtn = document.getElementById("sendBtn");
-            const statusMessage = document.getElementById("statusMessage");
+    function writeStr(off, str) {
+      for (let i = 0; i < str.length; i++) view.setUint8(off + i, str.charCodeAt(i));
+    }
 
-            if (!file) {
-                showStatus("Please select an audio file", "error");
-                return;
-            }
+    writeStr(0,  "RIFF");
+    view.setUint32(4,  36 + numBytes, true);
+    writeStr(8,  "WAVE");
+    writeStr(12, "fmt ");
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1,  true);   // PCM
+    view.setUint16(22, 1,  true);   // mono
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * 2, true);
+    view.setUint16(32, 2,  true);
+    view.setUint16(34, 16, true);
+    writeStr(36, "data");
+    view.setUint32(40, numBytes, true);
 
-            if (!ws || ws.readyState !== WebSocket.OPEN) {
-                showStatus("WebSocket not connected, reconnecting...", "error");
-                connectWebSocket();
-                return;
-            }
+    let offset = 44;
+    for (let i = 0; i < numFrames; i++, offset += 2) {
+      const s = Math.max(-1, Math.min(1, float32Pcm[i]));
+      view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+    }
+    return buf;
+  }
 
-            // Clear previous responses
-            originalContainer.innerHTML = "";
-            originalContainer.classList.add("empty");
-            translatedContainer.innerHTML = "";
-            translatedContainer.classList.add("empty");
-            statusMessage.classList.remove("show");
-            sendBtn.disabled = true;
+  // ── Client-side VAD (Silero via @ricky0123/vad-web) ───────
+  async function startVAD() {
+    ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.14.0/dist/";
+    micVad = await vad.MicVAD.new({
+      workletURL:  "https://cdn.jsdelivr.net/npm/@ricky0123/vad-web@0.0.22/dist/vad.worklet.bundle.min.js",
+      modelURL:    "https://cdn.jsdelivr.net/npm/@ricky0123/vad-web@0.0.22/dist/silero_vad.onnx",
 
-            // Reset audio state for new message
-            resetAudioState();
+      // ── VAD Algorithm Tuning ──────────────────────────────────────────────
+      // Raise from default 0.3 → less sensitive to background noise / breath sounds
+      positiveSpeechThreshold: 0.5,
 
-            try {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    ws.send(e.target.result);
-                    showStatus("Audio sent... processing", "success");
-                    sendBtn.disabled = false;
-                };
-                reader.onerror = function(error) {
-                    showStatus(`Error reading file: ${error}`, "error");
-                    sendBtn.disabled = false;
-                };
-                reader.readAsArrayBuffer(file);
-            } catch (error) {
-                originalContainer.innerHTML = `<div style="color: red;">Error: ${error.message}</div>`;
-                showStatus(`Error: ${error.message}`, "error");
-                sendBtn.disabled = false;
-            }
-        }
+      // Raise from default 0.25 → exits "speaking" state faster when voice drops off
+      negativeSpeechThreshold: 0.25,
 
-        function displayOriginalChunk(data) {
-            const originalContainer = document.getElementById("originalContainer");
-            if (originalContainer.classList.contains("empty")) {
-                originalContainer.innerHTML = "";
-                originalContainer.classList.remove("empty");
-            }
-            const chunk = document.createElement("div");
-            chunk.className = "chunk";
-            chunk.innerHTML = `
-                <div class="chunk-text">${escapeHtml(data.text)}</div>
-                <div class="chunk-count">Chunk #${data.stream_count}</div>
-            `;
-            originalContainer.appendChild(chunk);
-            originalContainer.scrollTop = originalContainer.scrollHeight;
-        }
+      // Lower from default 1400 ms → agent reacts ~900 ms sooner after user stops talking
+      redemptionMs: 1400,
 
-        function displayTranslatedChunk(data) {
-            const translatedContainer = document.getElementById("translatedContainer");
-            if (translatedContainer.classList.contains("empty")) {
-                translatedContainer.innerHTML = "";
-                translatedContainer.classList.remove("empty");
-            }
-            const chunk = document.createElement("div");
-            chunk.className = "chunk";
-            chunk.innerHTML = `
-                <div class="chunk-text">${escapeHtml(data.text)}</div>
-                <div class="chunk-count">Chunk #${data.stream_count}</div>
-            `;
-            translatedContainer.appendChild(chunk);
-            translatedContainer.scrollTop = translatedContainer.scrollHeight;
-        }
+      // Lower from default 800 ms → less leading silence prepended to the audio segment
+      preSpeechPadMs: 800,
 
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
+      // Lower from default 400 ms → still rejects noise bursts, but catches short commands
+      minSpeechMs: 150,
+      // ─────────────────────────────────────────────────────────────────────
 
-        function showStatus(message, type) {
-            const statusMessage = document.getElementById("statusMessage");
-            statusMessage.textContent = message;
-            statusMessage.className = `status show ${type}`;
+      onSpeechStart() {
+        micOrb.classList.add("speaking");
+        setStatus("Listening to you\u2026", "speaking");
+        stopAudio();
+        finalizeBotBubble(false);
+        if (ws && ws.readyState === WebSocket.OPEN)
+          ws.send(JSON.stringify({ type: "speech_start" }));
+      },
+      onSpeechEnd(float32Pcm) {
+        micOrb.classList.remove("speaking");
+        if (ws && ws.readyState === WebSocket.OPEN)
+          ws.send(encodeWAV(float32Pcm, 16000));
+      },
+      onVADMisfire() {
+        micOrb.classList.remove("speaking");
+        setStatus("Listening", "listening");
+      },
+    });
+    micVad.start();
+  }
 
-            setTimeout(() => {
-                statusMessage.classList.remove("show");
-            }, 5000);
-        }
+  function stopVAD() {
+    if (micVad) { micVad.destroy(); micVad = null; }
+  }
 
-        // Connect WebSocket on load
-        window.addEventListener("load", () => {
-            connectWebSocket();
-        });
-    </script>
+  // ── Session control ───────────────────────────────────────
+  async function toggleSession() {
+    sessionActive ? endSession() : await startSession();
+  }
+
+  async function startSession() {
+    try {
+      connectWS();
+      await startVAD();
+      sessionActive = true;
+      sessionBtn.textContent = "End Session";
+      sessionBtn.classList.add("active");
+      setStatus("Listening", "listening");
+    } catch (err) {
+      console.error(err);
+      setStatus("Mic error", "idle");
+      alert("Could not access microphone: " + err.message);
+    }
+  }
+
+  function endSession() {
+    stopVAD();
+    stopAudio();
+    if (ws) { ws.close(); ws = null; }
+    finalizeBotBubble(false);
+    micOrb.classList.remove("speaking");
+    sessionActive = false;
+    sessionBtn.textContent = "Start Session";
+    sessionBtn.classList.remove("active");
+    setStatus("Offline", "idle");
+  }
+
+  window.toggleSession     = toggleSession;
+  window.clearConversation = clearConversation;
+})();
+</script>
 </body>
 </html>

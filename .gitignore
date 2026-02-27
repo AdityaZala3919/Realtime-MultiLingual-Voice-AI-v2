@@ -1,3 +1,7 @@
 .env
 __pycache__
 sample_inputs
+elevenlabs
+stt_interrupt
+vad_params.md
+updates.md
