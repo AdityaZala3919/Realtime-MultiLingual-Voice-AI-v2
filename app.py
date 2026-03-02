@@ -4,17 +4,12 @@ import asyncio
 import os
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
-from sarvamai import AsyncSarvamAI
-import io as _io
 
 from chat import stream_chat_with_history, VOICE_AGENT_SYSTEM_PROMPT
 from translate import translation_pipeline
-from tts import tts_stream_sarvam, tts_stream_elevenlabs
-
-# ── Persistent Sarvam client (reused across all sessions) ──
-sarvam_client = AsyncSarvamAI(
-    api_subscription_key=os.getenv("SARVAM_API_KEY")
-)
+from tts import tts_stream_sarvam
+from stt import transcribe_wav
+from vad import _SessionVAD, CHUNK_SAMPLES
 
 app = FastAPI()
 
@@ -34,8 +29,6 @@ async def serve_frontend():
 # Conversational Voice Agent  /ws/agent
 # ──────────────────────────────────────────────────────────
 
-AGENT_SAMPLE_RATE = 16000
-
 @app.websocket("/ws/agent")
 async def websocket_agent(websocket: WebSocket):
     await websocket.accept()
@@ -53,15 +46,6 @@ async def websocket_agent(websocket: WebSocket):
             await websocket.send_json(data)
         except Exception:
             pass
-
-    # ── STT helper ──────────────────────────────────────────
-    async def transcribe_wav(wav_bytes: bytes):
-        print(f"[STT] calling Sarvam with {len(wav_bytes)} bytes", flush=True)
-        resp = await sarvam_client.speech_to_text.translate(
-            file=_io.BytesIO(wav_bytes), model="saaras:v3"
-        )
-        print(f"[STT] Sarvam returned: transcript={repr(resp.transcript)} lang={resp.language_code}", flush=True)
-        return resp.transcript, resp.language_code
 
     # ── Pipeline workers ────────────────────────────────────
     async def _translation_worker(translate_q, tts_q, target_lang):
@@ -99,8 +83,6 @@ async def websocket_agent(websocket: WebSocket):
     async def _tts_worker(tts_q, target_lang):
         """Streaming TTS — ElevenLabs for English, Sarvam for all other languages."""
         lang = target_lang or "en-IN"
-        use_elevenlabs = lang in ("en-IN", "en-US", "en-GB", "en")
-
         try:
             while True:
                 item = await tts_q.get()
@@ -109,33 +91,15 @@ async def websocket_agent(websocket: WebSocket):
                 text, _ = item
                 if not text.strip():
                     continue
-
                 try:
-                    if use_elevenlabs:
-                        try:
-                            async for audio_b64 in tts_stream_elevenlabs(text):
-                                await ws_send({
-                                    "type": "audio_chunk",
-                                    "audio": audio_b64,
-                                })
-                        except Exception as el_err:
-                            print(f"ElevenLabs TTS failed, falling back to Sarvam: {el_err}")
-                            await ws_send({"type": "tts_warning", "message": "ElevenLabs unavailable, using Sarvam"})
-                            async for audio_b64 in tts_stream_sarvam(text, lang="en-IN"):
-                                await ws_send({
-                                    "type": "audio_chunk",
-                                    "audio": audio_b64,
-                                })
-                    else:
-                        async for audio_b64 in tts_stream_sarvam(text, lang=lang):
-                            await ws_send({
-                                "type": "audio_chunk",
-                                "audio": audio_b64,
-                            })
+                    async for audio_b64 in tts_stream_sarvam(text, lang=lang):
+                        await ws_send({
+                            "type": "audio_chunk",
+                            "audio": audio_b64,
+                        })
                 except Exception as e:
                     print(f"TTS error for sentence: {e}")
                     await ws_send({"type": "tts_error", "message": str(e)})
-
         except asyncio.CancelledError:
             raise
         except Exception as e:
@@ -196,77 +160,116 @@ async def websocket_agent(websocket: WebSocket):
             tts_task.cancel()
             await asyncio.gather(trans_task, tts_task, return_exceptions=True)
 
-    # ── Main receive loop ────────────────────────────────────
-    # Client sends:
-    #   text frame  → JSON control message  (speech_start / playback_started / playback_ended)
-    #   binary frame → complete WAV segment  (produced by client-side Silero VAD)
-    try:
-        while True:
-            msg = await websocket.receive()
+    # ── Server-side VAD state ────────────────────────────────
+    session_vad = _SessionVAD()
 
-            # ── Control messages ─────────────────────────────
-            if "text" in msg and msg["text"]:
-                try:
-                    ctrl = json.loads(msg["text"])
-                except Exception:
-                    continue
-
-                if ctrl.get("type") == "speech_start":
-                    # VAD confirmed user started speaking — cancel bot immediately
-                    if active_pipeline and not active_pipeline.done():
-                        active_pipeline.cancel()
-                        try:
-                            await active_pipeline
-                        except (asyncio.CancelledError, Exception):
-                            pass
-                        await ws_send({"type": "interrupted"})
-
-            # ── Speech segment (WAV bytes from client VAD) ────
-            elif "bytes" in msg and msg["bytes"]:
-                # Always cancel any still-running pipeline before starting a new one.
-                # speech_start should have done this already, but guard against edge
-                # cases (first utterance, VAD misfire sending double speech_end, etc.)
-                if active_pipeline and not active_pipeline.done():
-                    active_pipeline.cancel()
-                    try:
-                        await active_pipeline
-                    except (asyncio.CancelledError, Exception):
-                        pass
-
-                wav_bytes = msg["bytes"]
-                await ws_send({"type": "processing"})
-                try:
-                    print(f"[STT] Sending {len(wav_bytes)} bytes to Sarvam...", flush=True)
-                    transcript, lang = await asyncio.wait_for(
-                        transcribe_wav(wav_bytes), timeout=20.0
-                    )
-                    lang = lang or "en-IN"
-                    print(f"[STT] transcript={repr(transcript)} lang={lang}", flush=True)
-
-                    if transcript.strip():
-                        await ws_send({"type": "transcript", "text": transcript})
-                        active_pipeline = asyncio.create_task(
-                            run_pipeline(transcript, lang)
-                        )
-                    else:
-                        await ws_send({"type": "idle"})
-
-                except asyncio.TimeoutError:
-                    print("[STT] Timed out after 20s", flush=True)
-                    await ws_send({"type": "error", "message": "STT timed out"})
-                except Exception as e:
-                    print(f"[STT] Error: {e}")
-                    await ws_send({"type": "error", "message": str(e)})
-
-            elif msg.get("type") == "websocket.disconnect":
-                break
-
-    except Exception as e:
-        print(f"Agent WebSocket closed: {e}")
-    finally:
+    async def _cancel_pipeline():
+        nonlocal active_pipeline
         if active_pipeline and not active_pipeline.done():
             active_pipeline.cancel()
             try:
                 await active_pipeline
             except (asyncio.CancelledError, Exception):
                 pass
+
+    async def _handle_speech_end():
+        """Called by the VAD loop when a complete speech segment is ready."""
+        nonlocal active_pipeline
+        wav_bytes = session_vad.get_wav_bytes()
+        await ws_send({"type": "processing"})
+        try:
+            print(f"[STT] Sending {len(wav_bytes)} bytes to Sarvam...", flush=True)
+            transcript, lang = await asyncio.wait_for(
+                transcribe_wav(wav_bytes), timeout=20.0
+            )
+            lang = lang or "en-IN"
+            print(f"[STT] transcript={repr(transcript)} lang={lang}", flush=True)
+
+            if transcript.strip():
+                await ws_send({"type": "transcript", "text": transcript})
+                active_pipeline = asyncio.create_task(
+                    run_pipeline(transcript, lang)
+                )
+            else:
+                await ws_send({"type": "idle"})
+
+        except asyncio.TimeoutError:
+            print("[STT] Timed out after 20s", flush=True)
+            await ws_send({"type": "error", "message": "STT timed out"})
+        except Exception as e:
+            print(f"[STT] Error: {e}")
+            await ws_send({"type": "error", "message": str(e)})
+
+    # ── Main receive loop ────────────────────────────────────
+    # Client sends:
+    #   binary frame → raw float32 PCM chunk (512 samples @ 16 kHz = 2048 bytes)
+    #                  streamed continuously while the session is active.
+    #   text frame   → JSON control message (playback_started / playback_ended)
+    #
+    # Server sends:
+    #   speech_start  – VAD detected onset of user speech (for client UI)
+    #   processing    – speech segment complete, STT running
+    #   transcript    – STT result
+    #   bot_text      – LLM response chunk
+    #   audio_chunk   – TTS audio
+    #   done          – full response delivered
+    #   interrupted   – response cancelled due to new user speech
+    #   idle          – blank transcript after VAD fired
+    #   error         – server-side error description
+    try:
+        while True:
+            msg = await websocket.receive()
+
+            if msg.get("type") == "websocket.disconnect":
+                break
+
+            # ── Control messages (playback tracking etc.) ──────
+            if "text" in msg and msg["text"]:
+                # Currently no inbound control messages are needed from the
+                # client in server-VAD mode, but we keep parsing for
+                # forward compatibility.
+                try:
+                    json.loads(msg["text"])  # validate JSON, ignore content
+                except Exception:
+                    pass
+                continue
+
+            # ── Raw float32 PCM chunk from client microphone ───
+            if "bytes" not in msg or not msg["bytes"]:
+                continue
+
+            chunk_bytes: bytes = msg["bytes"]
+
+            # Silero expects exactly CHUNK_SAMPLES float32 values.
+            # Silently skip malformed chunks.
+            if len(chunk_bytes) != CHUNK_SAMPLES * 4:
+                continue
+
+            # Run VAD — this is CPU-bound but fast (~0.5 ms), safe on event loop
+            event = await asyncio.get_event_loop().run_in_executor(
+                None, session_vad.process, chunk_bytes
+            )
+
+            if event == "start":
+                print("[VAD] Speech start", flush=True)
+                # Interrupt any active bot response
+                pipeline_was_active = (
+                    active_pipeline and not active_pipeline.done()
+                )
+                await _cancel_pipeline()
+                await ws_send({"type": "speech_start"})
+                if pipeline_was_active:
+                    await ws_send({"type": "interrupted"})
+
+            elif event == "end":
+                print("[VAD] Speech end", flush=True)
+                await _handle_speech_end()
+
+            elif event == "misfire":
+                print("[VAD] Misfire (too short)", flush=True)
+                await ws_send({"type": "idle"})
+
+    except Exception as e:
+        print(f"Agent WebSocket closed: {e}")
+    finally:
+        await _cancel_pipeline()

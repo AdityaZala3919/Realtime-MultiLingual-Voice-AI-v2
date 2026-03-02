@@ -19,13 +19,12 @@ DEFAULT_STREAM_URL_TEMPLATE: str = (
     "https://api.elevenlabs.io/v1/text-to-speech/{voice}/stream"
 )
 
-
 async def tts_stream_sarvam(
     text,
     lang="en-IN",
     model="bulbul:v3",
-    speaker="shubh",
-    pace=1.0,
+    speaker="ratan",
+    pace=1.05,
     api_key=SARVAM_API_KEY,
 ):
     """
@@ -56,7 +55,6 @@ async def tts_stream_sarvam(
                     print("="*10, "Sarvam", "="*10)
                     yield base64.b64encode(chunk).decode()
                     # await asyncio.sleep(0.01)  # 10ms between HTTP chunks
-
 
 async def tts_stream_elevenlabs(
     text: str,
@@ -101,7 +99,6 @@ async def tts_stream_elevenlabs(
                 if chunk:
                     print("="*10, "11labs", "="*10)
                     yield base64.b64encode(chunk).decode()
-
 
 async def tts(
     text,

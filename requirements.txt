@@ -4,3 +4,6 @@ httpx
 python-dotenv
 sarvamai
 litellm
+silero-vad
+torch
+numpy

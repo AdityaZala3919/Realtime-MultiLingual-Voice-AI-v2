@@ -330,13 +330,12 @@
     </div>
   </div>
 
-<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.14.0/dist/ort.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@ricky0123/vad-web@0.0.22/dist/bundle.min.js"></script>
+<!-- No client-side VAD libraries needed: VAD runs on the server -->
 <script>
 (() => {
-  const WS_URL             = `wss://golden-nonanimated-mose.ngrok-free.dev/ws/agent`;
+  //const WS_URL             = `wss://golden-nonanimated-mose.ngrok-free.dev/ws/agent`;
   
-  //const WS_URL             = `ws://${location.hostname}:8000/ws/agent`;
+  const WS_URL             = `ws://${location.hostname}:8000/ws/agent`;
 
   const conversationEl = document.getElementById("conversation");
   const emptyStateEl   = document.getElementById("emptyState");
@@ -347,8 +346,12 @@
   const waveBars       = document.getElementById("waveBars");
 
   let ws            = null;
-  let micVad        = null;
   let sessionActive = false;
+
+  // Microphone streaming state
+  let audioCtx        = null;
+  let micStream       = null;
+  let scriptProcessor = null;
 
   // Playback (MediaSource streaming, inspired by test.html)
   let audioEl      = null;
@@ -534,6 +537,13 @@
 
   function handleMsg(msg) {
     switch (msg.type) {
+      case "speech_start":
+        // Server-side VAD detected user speech onset
+        micOrb.classList.add("speaking");
+        setStatus("Listening to you\u2026", "speaking");
+        stopAudio();
+        finalizeBotBubble(false);
+        break;
       case "processing":
         micOrb.classList.remove("speaking");
         setStatus("Processing\u2026", "processing");
@@ -573,86 +583,42 @@
     }
   }
 
-  // ── WAV encoding (for Silero VAD output) ──────────────────
-  function encodeWAV(float32Pcm, sampleRate = 16000) {
-    const numFrames  = float32Pcm.length;
-    const numBytes   = numFrames * 2;
-    const buf        = new ArrayBuffer(44 + numBytes);
-    const view       = new DataView(buf);
-
-    function writeStr(off, str) {
-      for (let i = 0; i < str.length; i++) view.setUint8(off + i, str.charCodeAt(i));
-    }
-
-    writeStr(0,  "RIFF");
-    view.setUint32(4,  36 + numBytes, true);
-    writeStr(8,  "WAVE");
-    writeStr(12, "fmt ");
-    view.setUint32(16, 16, true);
-    view.setUint16(20, 1,  true);   // PCM
-    view.setUint16(22, 1,  true);   // mono
-    view.setUint32(24, sampleRate, true);
-    view.setUint32(28, sampleRate * 2, true);
-    view.setUint16(32, 2,  true);
-    view.setUint16(34, 16, true);
-    writeStr(36, "data");
-    view.setUint32(40, numBytes, true);
-
-    let offset = 44;
-    for (let i = 0; i < numFrames; i++, offset += 2) {
-      const s = Math.max(-1, Math.min(1, float32Pcm[i]));
-      view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
-    }
-    return buf;
-  }
-
-  // ── Client-side VAD (Silero via @ricky0123/vad-web) ───────
-  async function startVAD() {
-    ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.14.0/dist/";
-    micVad = await vad.MicVAD.new({
-      workletURL:  "https://cdn.jsdelivr.net/npm/@ricky0123/vad-web@0.0.22/dist/vad.worklet.bundle.min.js",
-      modelURL:    "https://cdn.jsdelivr.net/npm/@ricky0123/vad-web@0.0.22/dist/silero_vad.onnx",
-
-      // ── VAD Algorithm Tuning ──────────────────────────────────────────────
-      // Raise from default 0.3 → less sensitive to background noise / breath sounds
-      positiveSpeechThreshold: 0.5,
-
-      // Raise from default 0.25 → exits "speaking" state faster when voice drops off
-      negativeSpeechThreshold: 0.25,
-
-      // Lower from default 1400 ms → agent reacts ~900 ms sooner after user stops talking
-      redemptionMs: 1400,
-
-      // Lower from default 800 ms → less leading silence prepended to the audio segment
-      preSpeechPadMs: 800,
-
-      // Lower from default 400 ms → still rejects noise bursts, but catches short commands
-      minSpeechMs: 150,
-      // ─────────────────────────────────────────────────────────────────────
-
-      onSpeechStart() {
-        micOrb.classList.add("speaking");
-        setStatus("Listening to you\u2026", "speaking");
-        stopAudio();
-        finalizeBotBubble(false);
-        if (ws && ws.readyState === WebSocket.OPEN)
-          ws.send(JSON.stringify({ type: "speech_start" }));
+  // ── Continuous microphone streaming (server-side VAD) ─────
+  // Streams raw float32 PCM chunks (512 samples @ 16 kHz, 2048 bytes each)
+  // to the server, which runs Silero VAD and sends back speech events.
+  async function startStreaming() {
+    audioCtx  = new AudioContext({ sampleRate: 16000 });
+    micStream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        sampleRate: 16000,
+        channelCount: 1,
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
       },
-      onSpeechEnd(float32Pcm) {
-        micOrb.classList.remove("speaking");
-        if (ws && ws.readyState === WebSocket.OPEN)
-          ws.send(encodeWAV(float32Pcm, 16000));
-      },
-      onVADMisfire() {
-        micOrb.classList.remove("speaking");
-        setStatus("Listening", "listening");
-      },
+      video: false,
     });
-    micVad.start();
+
+    const source = audioCtx.createMediaStreamSource(micStream);
+
+    // ScriptProcessorNode with bufferSize=512 → exactly what Silero expects
+    // (512 samples × 4 bytes = 2048 bytes per frame).
+    scriptProcessor = audioCtx.createScriptProcessor(512, 1, 1);
+    scriptProcessor.onaudioprocess = (e) => {
+      if (!ws || ws.readyState !== WebSocket.OPEN) return;
+      const pcm = e.inputBuffer.getChannelData(0);
+      ws.send(pcm.buffer.slice(pcm.byteOffset, pcm.byteOffset + pcm.byteLength));
+    };
+
+    source.connect(scriptProcessor);
+    // Connect to destination to keep the audio graph alive in all browsers
+    scriptProcessor.connect(audioCtx.destination);
   }
 
-  function stopVAD() {
-    if (micVad) { micVad.destroy(); micVad = null; }
+  function stopStreaming() {
+    if (scriptProcessor) { scriptProcessor.disconnect(); scriptProcessor = null; }
+    if (micStream)       { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
+    if (audioCtx)        { audioCtx.close(); audioCtx = null; }
   }
 
   // ── Session control ───────────────────────────────────────
@@ -663,7 +629,7 @@
   async function startSession() {
     try {
       connectWS();
-      await startVAD();
+      await startStreaming();
       sessionActive = true;
       sessionBtn.textContent = "End Session";
       sessionBtn.classList.add("active");
@@ -676,7 +642,7 @@
   }
 
   function endSession() {
-    stopVAD();
+    stopStreaming();
     stopAudio();
     if (ws) { ws.close(); ws = null; }
     finalizeBotBubble(false);
