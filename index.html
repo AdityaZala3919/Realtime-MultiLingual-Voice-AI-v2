@@ -1,0 +1,1416 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport"
+    content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=0">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta id="theme-color-meta" name="theme-color" content="#000000">
+  <title>Aarogya Vaani</title>
+  <link rel="icon"
+    href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500&display=swap"
+    rel="stylesheet">
+
+  <style>
+    *,
+    *::before,
+    *::after {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --bg: #000000;
+      --surface: rgba(14, 14, 14, 0.75);
+      --surface-card: rgba(10, 10, 10, 0.65);
+      --border: rgba(255, 255, 255, 0.07);
+      --border-hover: rgba(255, 255, 255, 0.14);
+      --accent: #1de9b6;
+      --accent-alt: #00e5ff;
+      --accent-dim: rgba(29, 233, 182, 0.1);
+      --text: #f0ede8;
+      --text-muted: rgba(240, 237, 232, 0.38);
+      --text-soft: rgba(240, 237, 232, 0.62);
+      --overlay: rgba(0, 0, 0, 0.55);
+      --card-grad: linear-gradient(160deg, rgba(18, 18, 18, 0.55), rgba(6, 6, 6, 0.75));
+      --sheet-bg: rgba(6, 6, 6, 0.94);
+      --orb-idle: radial-gradient(circle at 30% 30%, #1a1a1a, #050505);
+      --orb-listen-1: #00e5ff;
+      --orb-listen-2: #1de9b6;
+      --orb-think-1: #ffcf33;
+      --orb-think-2: #ff9100;
+      --orb-speak-1: #1de9b6;
+      --orb-speak-2: #00e5ff;
+      --mandala-primary: rgba(29, 233, 182, 1);
+      --mandala-secondary: rgba(0, 229, 255, 1);
+      --mandala-tertiary: rgba(100, 200, 180, 1);
+      --mandala-glow: rgba(29, 233, 182, 0.18);
+      --mandala-bg: #000000;
+    }
+
+    body.light-mode {
+      --bg: #f7f4ef;
+      --surface: rgba(238, 234, 226, 0.82);
+      --surface-card: rgba(245, 242, 236, 0.8);
+      --border: rgba(0, 0, 0, 0.07);
+      --border-hover: rgba(0, 0, 0, 0.14);
+      --accent: #00897b;
+      --accent-alt: #0097a7;
+      --accent-dim: rgba(0, 137, 123, 0.09);
+      --text: #0a0a0a;
+      --text-muted: rgba(10, 10, 10, 0.38);
+      --text-soft: rgba(10, 10, 10, 0.6);
+      --overlay: rgba(247, 244, 239, 0.5);
+      --card-grad: linear-gradient(160deg, rgba(255, 255, 255, 0.65), rgba(235, 231, 223, 0.8));
+      --sheet-bg: rgba(247, 244, 239, 0.96);
+      --orb-idle: radial-gradient(circle at 30% 30%, #e0ddd6, #c8c4bc);
+      --mandala-primary: rgba(0, 137, 123, 1);
+      --mandala-secondary: rgba(0, 151, 167, 1);
+      --mandala-tertiary: rgba(0, 105, 92, 1);
+      --mandala-glow: rgba(0, 137, 123, 0.12);
+      --mandala-bg: #f7f4ef;
+    }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100dvh;
+      overflow-y: auto;
+      touch-action: manipulation;
+      transition: background 0.5s ease, color 0.4s ease;
+    }
+
+    /* ── CANVAS MANDALA ── */
+    #mandala-canvas {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 0;
+      pointer-events: none;
+      opacity: 1;
+      transition: opacity 0.5s ease;
+    }
+
+    /* Radial fade overlay — kills edges, keeps center alive */
+    .mandala-vignette {
+      position: fixed;
+      inset: 0;
+      z-index: 1;
+      pointer-events: none;
+      background: radial-gradient(ellipse 55% 55% at 50% 48%,
+          transparent 0%,
+          transparent 30%,
+          var(--bg) 75%);
+      transition: background 0.5s ease;
+    }
+
+    /* Top/bottom edge kill */
+    .mandala-vignette::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(to bottom, var(--bg) 0%, transparent 18%, transparent 82%, var(--bg) 100%),
+        linear-gradient(to right, var(--bg) 0%, transparent 12%, transparent 88%, var(--bg) 100%);
+    }
+
+    /* ── LANDING ── */
+    #landing-view {
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    .landing-header {
+      position: relative;
+      z-index: 10;
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 28px 36px;
+    }
+
+    .logo-mark {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 17px;
+      font-weight: 400;
+      letter-spacing: 0.06em;
+      color: var(--text-soft);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .logo-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--accent);
+      animation: breathe 3.5s ease-in-out infinite;
+    }
+
+    @keyframes breathe {
+
+      0%,
+      100% {
+        opacity: 0.4;
+        transform: scale(1);
+      }
+
+      50% {
+        opacity: 1;
+        transform: scale(1.5);
+      }
+    }
+
+    .theme-toggle {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      font-size: 15px;
+      transition: border-color 0.3s ease;
+    }
+
+    .theme-toggle:hover {
+      border-color: var(--border-hover);
+    }
+
+    /* ── HERO ── */
+    .landing-content {
+      position: relative;
+      z-index: 10;
+      width: 100%;
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 8vh 32px 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+    }
+
+    .eyebrow {
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 24px;
+      opacity: 0;
+      animation: riseIn 0.7s ease 0.3s forwards;
+    }
+
+    .hero-title {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: clamp(56px, 11vw, 100px);
+      font-weight: 300;
+      line-height: 0.92;
+      letter-spacing: -0.02em;
+      color: var(--text);
+      margin-bottom: 28px;
+      opacity: 0;
+      animation: riseIn 0.9s ease 0.45s forwards;
+    }
+
+    .hero-title em {
+      font-style: italic;
+      color: var(--accent);
+    }
+
+    .hero-sub {
+      font-size: 15px;
+      font-weight: 300;
+      line-height: 1.75;
+      color: var(--text-soft);
+      max-width: 400px;
+      margin: 0 auto 40px;
+      opacity: 0;
+      animation: riseIn 0.9s ease 0.6s forwards;
+    }
+
+    @keyframes riseIn {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* ── CTA ── */
+    .cta-group {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      opacity: 0;
+      animation: riseIn 0.9s ease 0.75s forwards;
+      margin-bottom: 80px;
+    }
+
+    .landing-cta {
+      padding: 15px 48px;
+      border-radius: 99px;
+      border: none;
+      background: var(--accent);
+      color: #000;
+      font-size: 14px;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      cursor: pointer;
+      font-family: 'DM Sans', sans-serif;
+      transition: transform 0.2s ease, box-shadow 0.3s ease;
+    }
+
+    .landing-cta:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 30px rgba(29, 233, 182, 0.22);
+    }
+
+    .landing-cta:active {
+      transform: scale(0.97);
+    }
+
+    .cta-note {
+      font-size: 11px;
+      color: var(--text-muted);
+      letter-spacing: 0.06em;
+    }
+
+    /* ── SCROLL HINT ── */
+    .scroll-hint {
+      position: relative;
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 64px;
+      opacity: 0;
+      animation: riseIn 1s ease 1.1s forwards;
+    }
+
+    .scroll-line {
+      width: 1px;
+      height: 36px;
+      background: linear-gradient(to bottom, var(--accent), transparent);
+      animation: linePulse 2.2s ease-in-out infinite;
+    }
+
+    @keyframes linePulse {
+
+      0%,
+      100% {
+        opacity: 0.25;
+      }
+
+      50% {
+        opacity: 0.9;
+      }
+    }
+
+    .scroll-label {
+      font-size: 9px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    /* ── FEATURES ── */
+    .features-section {
+      position: relative;
+      z-index: 10;
+      width: 100%;
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 0 24px 100px;
+    }
+
+    .section-eyebrow {
+      font-size: 9px;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      text-align: center;
+      margin-bottom: 24px;
+      opacity: 0;
+      animation: riseIn 0.8s ease 0.9s forwards;
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 20px;
+    }
+
+    @media (max-width: 480px) {
+      .features-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .feature-card {
+      background: var(--card-grad);
+      padding: 26px 26px;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      position: relative;
+      border-radius: 18px;
+      border: 1px solid var(--border);
+      transition: all 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
+      opacity: 0;
+      animation: riseIn 0.8s ease forwards;
+    }
+
+    .feature-card:nth-child(1) {
+      animation-delay: 1.0s;
+    }
+
+    .feature-card:nth-child(2) {
+      animation-delay: 1.1s;
+    }
+
+    .feature-card:nth-child(3) {
+      animation-delay: 1.2s;
+    }
+
+    .feature-card:nth-child(4) {
+      animation-delay: 1.3s;
+    }
+
+    .feature-card:hover {
+      transform: translateY(-6px);
+      border-color: var(--border-hover);
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.1), 0 0 20px var(--accent-dim);
+    }
+
+    .f-icon {
+      width: 34px;
+      height: 34px;
+      border-radius: 9px;
+      background: var(--accent-dim);
+      border: 1px solid transparent;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 15px;
+      margin-bottom: 14px;
+      transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+
+    .feature-card:hover .f-icon {
+      transform: scale(1.15) rotate(-5deg);
+      border-color: var(--accent);
+      box-shadow: 0 4px 12px var(--accent-dim);
+    }
+
+    .feature-card h3 {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text);
+      margin-bottom: 7px;
+      letter-spacing: 0.01em;
+    }
+
+    .feature-card p {
+      font-size: 12.5px;
+      line-height: 1.68;
+      color: var(--text-muted);
+      font-weight: 300;
+    }
+
+    /* ── AGENT VIEW ── */
+    #agent-view {
+      display: none;
+      flex-direction: column;
+      height: 100dvh;
+      width: 100%;
+      position: fixed;
+      top: 0;
+      left: 0;
+      opacity: 0;
+      transition: opacity 0.5s ease;
+      background: var(--bg);
+      z-index: 5;
+    }
+
+    header {
+      position: absolute;
+      top: env(safe-area-inset-top, 0px);
+      left: 0;
+      right: 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 24px;
+      z-index: 10;
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .header-title {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 17px;
+      font-weight: 400;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .status-badge {
+      font-size: 11px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      padding: 6px 12px;
+      border-radius: 20px;
+      background: var(--surface);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      transition: all 0.3s ease;
+    }
+
+    main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      z-index: 1;
+    }
+
+    .orb-container {
+      position: relative;
+      width: 200px;
+      height: 200px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 10vh;
+      transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+
+    .orb-container:active {
+      transform: scale(0.95);
+    }
+
+    .orb {
+      width: 140px;
+      height: 140px;
+      border-radius: 50%;
+      background: var(--orb-idle);
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2), inset 0 0 20px rgba(255, 255, 255, 0.05);
+      position: relative;
+      z-index: 2;
+      transition: all 0.5s ease;
+    }
+
+    .orb-glow {
+      position: absolute;
+      inset: -20px;
+      border-radius: 50%;
+      background: transparent;
+      z-index: 1;
+      filter: blur(30px);
+      opacity: 0;
+      transition: opacity 0.5s ease, background 0.5s ease;
+    }
+
+    .orb-waves {
+      position: absolute;
+      inset: -40px;
+      border-radius: 50%;
+      border: 2px solid transparent;
+      z-index: 0;
+      opacity: 0;
+    }
+
+    #agent-view.state-listening .orb {
+      background: radial-gradient(circle at 30% 30%, var(--orb-listen-1), var(--orb-listen-2));
+      box-shadow: inset 0 0 30px rgba(255, 255, 255, 0.2);
+    }
+
+    #agent-view.state-listening .orb-glow {
+      opacity: 0.5;
+      background: var(--orb-listen-2);
+      animation: pulse-glow 3s ease-in-out infinite alternate;
+    }
+
+    #agent-view.state-processing .orb {
+      background: linear-gradient(45deg, var(--orb-think-1), var(--orb-think-2));
+      animation: spin-orb 1.5s linear infinite;
+    }
+
+    #agent-view.state-processing .orb-glow {
+      opacity: 0.6;
+      background: var(--orb-think-1);
+    }
+
+    #agent-view.state-speaking .orb {
+      background: radial-gradient(circle at 70% 70%, var(--orb-speak-1), var(--orb-speak-2));
+    }
+
+    #agent-view.state-speaking .orb-glow {
+      opacity: 0.8;
+      background: var(--orb-speak-2);
+      animation: pulse-glow-fast 1s ease-in-out infinite alternate;
+    }
+
+    #agent-view.state-speaking .orb-waves {
+      opacity: 1;
+      border-color: var(--orb-speak-1);
+      animation: emit-waves 1.2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+    }
+
+    @keyframes pulse-glow {
+      0% {
+        transform: scale(1);
+        opacity: 0.4
+      }
+
+      100% {
+        transform: scale(1.15);
+        opacity: 0.7
+      }
+    }
+
+    @keyframes pulse-glow-fast {
+      0% {
+        transform: scale(0.95);
+        opacity: 0.6
+      }
+
+      100% {
+        transform: scale(1.2);
+        opacity: 0.9
+      }
+    }
+
+    @keyframes spin-orb {
+      0% {
+        transform: rotate(0deg)
+      }
+
+      100% {
+        transform: rotate(360deg)
+      }
+    }
+
+    @keyframes emit-waves {
+      0% {
+        transform: scale(0.8);
+        opacity: 0.8;
+        border-width: 4px
+      }
+
+      100% {
+        transform: scale(1.6);
+        opacity: 0;
+        border-width: 1px
+      }
+    }
+
+    .subtitle {
+      position: absolute;
+      bottom: 20%;
+      text-align: center;
+      width: 80%;
+      color: var(--text-muted);
+      font-size: 15px;
+      font-weight: 300;
+      line-height: 1.4;
+      min-height: 48px;
+      transition: opacity 0.3s ease, transform 0.3s ease;
+    }
+
+    .subtitle b {
+      color: var(--text);
+      font-weight: 500;
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .controls {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      padding: env(safe-area-inset-bottom, 24px) 24px 32px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      z-index: 20;
+    }
+
+    .btn-main {
+      width: 100%;
+      max-width: 320px;
+      padding: 16px 24px;
+      border-radius: 99px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      color: var(--text);
+      font-size: 15px;
+      font-weight: 500;
+      font-family: 'DM Sans', sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .btn-main:active {
+      background: var(--border);
+      transform: scale(0.98)
+    }
+
+    .btn-main.active {
+      background: var(--accent-dim);
+      border-color: rgba(29, 233, 182, 0.4);
+      color: var(--accent)
+    }
+
+    .aux-controls {
+      display: flex;
+      gap: 20px;
+      width: 100%;
+      max-width: 320px;
+      justify-content: space-between;
+    }
+
+    .btn-icon {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      padding: 8px;
+      font-family: 'DM Sans', sans-serif;
+    }
+
+    .btn-icon:hover {
+      color: var(--text);
+    }
+
+    .bottom-sheet {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: var(--sheet-bg);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-top: 1px solid var(--border);
+      border-radius: 24px 24px 0 0;
+      height: 75dvh;
+      transform: translateY(100%);
+      transition: transform 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+      will-change: transform;
+    }
+
+    .bottom-sheet.no-transition {
+      transition: none
+    }
+
+    .bottom-sheet.open {
+      transform: translateY(0);
+      box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.2)
+    }
+
+    .sheet-handle {
+      width: 100%;
+      padding: 12px;
+      display: flex;
+      justify-content: center;
+      cursor: pointer;
+    }
+
+    .sheet-handle-bar {
+      width: 40px;
+      height: 5px;
+      background: var(--text-muted);
+      border-radius: 99px;
+      opacity: 0.5;
+    }
+
+    #conversation {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px 24px 40px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      scroll-behavior: smooth;
+    }
+
+    .turn {
+      display: flex;
+      flex-direction: column;
+      font-size: 15px;
+      line-height: 1.5;
+      animation: fadeUp .3s ease
+    }
+
+    .turn.user {
+      align-items: flex-end
+    }
+
+    .turn.bot {
+      align-items: flex-start
+    }
+
+    .bubble {
+      max-width: 85%;
+      padding: 14px 18px;
+      border-radius: 18px
+    }
+
+    .turn.user .bubble {
+      background: var(--accent-dim);
+      border: 1px solid rgba(29, 233, 182, 0.3);
+      border-bottom-right-radius: 4px;
+      color: var(--text)
+    }
+
+    .turn.bot .bubble {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-bottom-left-radius: 4px;
+      color: var(--text)
+    }
+
+    .bubble.streaming .bubble-text::after {
+      content: " ▌";
+      animation: blink 1s step-end infinite;
+      opacity: 0.5
+    }
+
+    @keyframes blink {
+      50% {
+        opacity: 0
+      }
+    }
+
+    @keyframes fadeUp {
+      from {
+        opacity: 0;
+        transform: translateY(10px)
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0)
+      }
+    }
+
+    .sheet-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 90;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.4s ease
+    }
+
+    .sheet-overlay.active {
+      opacity: 1;
+      pointer-events: auto
+    }
+
+    @media(max-width:600px) {
+      .landing-header {
+        padding: 20px
+      }
+
+      .landing-content {
+        padding: 6vh 20px 0
+      }
+
+      .features-section {
+        padding: 0 16px 80px
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- Sacred Geometry Canvas -->
+  <canvas id="mandala-canvas"></canvas>
+  <div class="mandala-vignette"></div>
+
+  <!-- ===== LANDING ===== -->
+  <div id="landing-view">
+    <div class="landing-header">
+      <div class="logo-mark">
+        <div class="logo-dot"></div>
+        Aarogya Vaani
+      </div>
+      <div class="theme-toggle" onclick="toggleTheme()">
+        <span id="themeIcon">🌓</span>
+      </div>
+    </div>
+
+    <div class="landing-content">
+      <p class="eyebrow">Multilingual AI Health Companion</p>
+      <h1 class="hero-title">Speak.<br><em>Be heard.</em><br>Heal.</h1>
+      <p class="hero-sub">An empathetic 24/7 voice companion built for Bharat — understanding every dialect, honouring
+        every feeling.</p>
+      <div class="cta-group">
+        <button class="landing-cta" onclick="enterApp()">Begin Consultation</button>
+        <span class="cta-note">No account · No data stored · Fully private</span>
+      </div>
+    </div>
+
+    <div class="scroll-hint">
+      <div class="scroll-line"></div>
+      <span class="scroll-label">Explore</span>
+    </div>
+
+    <div class="features-section">
+      <p class="section-eyebrow">What makes us different</p>
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="f-icon">🎙️</div>
+          <h3>Real-time Voice</h3>
+          <p>No typing. Just speak. Ultra-low latency WebSocket streaming — zero friction between thought and response.
+          </p>
+        </div>
+        <div class="feature-card">
+          <div class="f-icon">🇮🇳</div>
+          <h3>Indian Languages</h3>
+          <p>Sarvam AI models trained on Indian dialects — Hindi, Gujarati, Tamil, Marathi and more, understood deeply.
+          </p>
+        </div>
+        <div class="feature-card">
+          <div class="f-icon">💬</div>
+          <h3>Live Translation</h3>
+          <p>Seamless translation that preserves nuance, context, and emotional tone across every language barrier.</p>
+        </div>
+        <div class="feature-card">
+          <div class="f-icon">🔒</div>
+          <h3>Privacy First</h3>
+          <p>No long-term audio storage. Your health conversations stay yours — safety and dignity by design.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== AGENT VIEW ===== -->
+  <div id="agent-view">
+    <header>
+      <div class="header-left">
+        <div class="header-title" onclick="goHome()" style="cursor:pointer;">
+          <span style="font-family:'DM Sans',sans-serif;opacity:0.6;font-size:15px;">←</span> AV
+        </div>
+      </div>
+      <div class="header-right">
+        <div class="status-badge" id="statusBadge">Offline</div>
+        <div class="theme-toggle" onclick="toggleTheme()"><span id="agentThemeIcon">🌓</span></div>
+      </div>
+    </header>
+
+    <main>
+      <div class="orb-container" id="orbContainer" onclick="toggleSession()">
+        <div class="orb-waves"></div>
+        <div class="orb-glow"></div>
+        <div class="orb"></div>
+      </div>
+      <div class="subtitle" id="subtitle">Tap the Orb or press Start below to begin.</div>
+    </main>
+
+    <div class="controls">
+      <button class="btn-main" id="sessionBtn" onclick="toggleSession()">Start Session</button>
+      <div class="aux-controls">
+        <button class="btn-icon" onclick="toggleSheet()"><span>💬</span> Transcript</button>
+        <button class="btn-icon" onclick="clearConversation()"><span>🗑️</span> Clear</button>
+      </div>
+    </div>
+
+    <div class="sheet-overlay" id="sheetOverlay" onclick="toggleSheet()"></div>
+    <div class="bottom-sheet" id="bottomSheet">
+      <div class="sheet-handle" onclick="toggleSheet()">
+        <div class="sheet-handle-bar"></div>
+      </div>
+      <div id="conversation"></div>
+    </div>
+  </div>
+
+  <script>
+    (() => {
+      /* ── THEME ── */
+      const body = document.body;
+      const themeIcon = document.getElementById('themeIcon');
+      const agentThemeIcon = document.getElementById('agentThemeIcon');
+      const themeMeta = document.getElementById('theme-color-meta');
+      let isLight = false;
+
+      window.toggleTheme = () => {
+        isLight = body.classList.toggle('light-mode');
+        localStorage.setItem('theme', isLight ? 'light' : 'dark');
+        updateThemeUI(isLight);
+        updateMandalaColors();
+      };
+
+      function updateThemeUI(light) {
+        const icon = light ? '☀️' : '🌓';
+        themeIcon.textContent = icon;
+        if (agentThemeIcon) agentThemeIcon.textContent = icon;
+        themeMeta.setAttribute('content', light ? '#f7f4ef' : '#000000');
+      }
+
+      const saved = localStorage.getItem('theme');
+      if (saved === 'light') { isLight = true; body.classList.add('light-mode'); updateThemeUI(true); }
+
+      /* ── SACRED GEOMETRY MANDALA ── */
+      const canvas = document.getElementById('mandala-canvas');
+      const ctx = canvas.getContext('2d');
+      let W, H, cx, cy, R, dpr;
+      let t = 0;
+      let raf;
+
+      // Color config
+      let C = {};
+
+      function updateMandalaColors() {
+        if (isLight) {
+          C = {
+            bg: '#f7f4ef',
+            p: 'rgba(0,137,123,',
+            s: 'rgba(0,151,167,',
+            g: 'rgba(0,137,123,',
+            glow: 'rgba(0,137,123,',
+            center: '#00897b',
+            spark: 'rgba(0,137,123,'
+          };
+        } else {
+          C = {
+            bg: '#000000',
+            p: 'rgba(29,233,182,',
+            s: 'rgba(0,229,255,',
+            g: 'rgba(100,220,190,',
+            glow: 'rgba(29,233,182,',
+            center: '#1de9b6',
+            spark: 'rgba(29,233,182,'
+          };
+        }
+      }
+      updateMandalaColors();
+
+      function resize() {
+        dpr = window.devicePixelRatio || 1;
+        W = window.innerWidth;
+        H = window.innerHeight;
+        canvas.width = W * dpr;
+        canvas.height = H * dpr;
+        canvas.style.width = W + 'px';
+        canvas.style.height = H + 'px';
+        ctx.scale(dpr, dpr);
+        cx = W / 2;
+        cy = H / 2;
+        R = Math.min(W, H) * 0.38;
+      }
+
+      window.addEventListener('resize', () => { resize(); });
+      resize();
+
+      // Draw a polygon (used for sacred triangles & hexagons)
+      function poly(x, y, r, n, rot, stroke, lineW, alpha) {
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(rot);
+        ctx.beginPath();
+        for (let i = 0; i <= n; i++) {
+          const a = (i / n) * Math.PI * 2;
+          i === 0 ? ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r)
+            : ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+        }
+        ctx.strokeStyle = stroke + alpha + ')';
+        ctx.lineWidth = lineW;
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // Draw dotted ring
+      function dottedRing(r, count, dotR, alpha, phase) {
+        for (let i = 0; i < count; i++) {
+          const a = (i / count) * Math.PI * 2 + phase;
+          const x = cx + Math.cos(a) * r;
+          const y = cy + Math.sin(a) * r;
+          ctx.beginPath();
+          ctx.arc(x, y, dotR, 0, Math.PI * 2);
+          ctx.fillStyle = C.p + alpha + ')';
+          ctx.fill();
+        }
+      }
+
+      // Petal / vesica shape
+      function petal(r, count, rot, alpha, lineW) {
+        for (let i = 0; i < count; i++) {
+          const a = (i / count) * Math.PI * 2 + rot;
+          const bx = cx + Math.cos(a) * r;
+          const by = cy + Math.sin(a) * r;
+          ctx.beginPath();
+          ctx.arc(bx, by, r, a + Math.PI / 2, a - Math.PI / 2);
+          ctx.strokeStyle = C.p + alpha + ')';
+          ctx.lineWidth = lineW;
+          ctx.stroke();
+        }
+      }
+
+      // Spoke lines
+      function spokes(count, rIn, rOut, rot, alpha, lineW) {
+        for (let i = 0; i < count; i++) {
+          const a = (i / count) * Math.PI * 2 + rot;
+          ctx.beginPath();
+          ctx.moveTo(cx + Math.cos(a) * rIn, cy + Math.sin(a) * rIn);
+          ctx.lineTo(cx + Math.cos(a) * rOut, cy + Math.sin(a) * rOut);
+          ctx.strokeStyle = C.g + alpha + ')';
+          ctx.lineWidth = lineW;
+          ctx.stroke();
+        }
+      }
+
+      function draw() {
+        ctx.clearRect(0, 0, W, H);
+
+        const T = t * 0.0004; // slow time
+
+        /* ── 0. CORE GLOW (divine light source) ── */
+        const glowR = R * 0.55;
+        const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, glowR);
+        grad.addColorStop(0, C.glow + '0.13)');
+        grad.addColorStop(0.4, C.glow + '0.055)');
+        grad.addColorStop(1, C.glow + '0)');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(cx, cy, glowR, 0, Math.PI * 2);
+        ctx.fill();
+
+        /* ── 1. OUTER DOTTED RING ── */
+        dottedRing(R * 1.0, 72, 1.2, 0.22, T * 0.3);
+
+        /* ── 2. OUTER STRUCTURAL RING ── */
+        ctx.beginPath();
+        ctx.arc(cx, cy, R * 0.98, 0, Math.PI * 2);
+        ctx.strokeStyle = C.p + '0.14)';
+        ctx.lineWidth = 0.6;
+        ctx.stroke();
+
+        /* ── 3. OUTER PETALS (12-fold) ── */
+        petal(R * 0.58, 12, T * 0.15, 0.06, 0.5);
+
+        /* ── 4. ROTATING DODECAGON ── */
+        poly(cx, cy, R * 0.88, 12, T * 0.08, C.p, 0.5, '0.1');
+
+        /* ── 5. SPOKES (24) ── */
+        spokes(24, R * 0.18, R * 0.88, T * 0.12, '0.06', 0.4);
+
+        /* ── 6. MID RING + dotted ── */
+        ctx.beginPath();
+        ctx.arc(cx, cy, R * 0.72, 0, Math.PI * 2);
+        ctx.strokeStyle = C.s + '0.12)';
+        ctx.lineWidth = 0.5;
+        ctx.stroke();
+
+        dottedRing(R * 0.72, 48, 1.0, 0.18, -T * 0.4);
+
+        /* ── 7. HEXAGRAM (Star of David / Shatkona) ── */
+        poly(cx, cy, R * 0.62, 3, T * 0.1, C.p, 0.7, '0.18');
+        poly(cx, cy, R * 0.62, 3, T * 0.1 + Math.PI, C.s, 0.7, '0.14');
+
+        /* ── 8. INNER PETALS (6-fold, flower of life hint) ── */
+        petal(R * 0.32, 6, -T * 0.18, 0.1, 0.6);
+
+        /* ── 9. SECOND HEXAGON ── */
+        poly(cx, cy, R * 0.52, 6, -T * 0.14, C.p, 0.5, '0.13');
+
+        /* ── 10. INNER SQUARE (rotates opposite) ── */
+        poly(cx, cy, R * 0.42, 4, T * 0.22 + Math.PI / 4, C.s, 0.5, '0.1');
+
+        /* ── 11. INNER RING ── */
+        ctx.beginPath();
+        ctx.arc(cx, cy, R * 0.36, 0, Math.PI * 2);
+        ctx.strokeStyle = C.p + '0.18)';
+        ctx.lineWidth = 0.6;
+        ctx.stroke();
+
+        dottedRing(R * 0.36, 24, 1.2, 0.28, T * 0.6);
+
+        /* ── 12. INNERMOST TRIANGLE ── */
+        poly(cx, cy, R * 0.22, 3, -T * 0.28, C.p, 0.8, '0.22');
+        poly(cx, cy, R * 0.22, 3, -T * 0.28 + Math.PI, C.s, 0.8, '0.16');
+
+        /* ── 13. TINY INNER RING ── */
+        ctx.beginPath();
+        ctx.arc(cx, cy, R * 0.14, 0, Math.PI * 2);
+        ctx.strokeStyle = C.p + '0.3)';
+        ctx.lineWidth = 0.7;
+        ctx.stroke();
+
+        /* ── 14. CENTER JEWEL (bindu) ── */
+        // Outer halo
+        const innerGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, R * 0.08);
+        innerGrad.addColorStop(0, C.glow + '0.7)');
+        innerGrad.addColorStop(0.5, C.glow + '0.3)');
+        innerGrad.addColorStop(1, C.glow + '0)');
+        ctx.fillStyle = innerGrad;
+        ctx.beginPath();
+        ctx.arc(cx, cy, R * 0.08, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Core dot
+        ctx.beginPath();
+        ctx.arc(cx, cy, 4, 0, Math.PI * 2);
+        ctx.fillStyle = C.center;
+        ctx.fill();
+
+        /* ── 15. SPARKLING PARTICLES on outer ring ── */
+        const sparkCount = 8;
+        for (let i = 0; i < sparkCount; i++) {
+          const a = (i / sparkCount) * Math.PI * 2 + T * 0.5;
+          const pulse = 0.4 + 0.6 * Math.abs(Math.sin(T * 3 + i * 1.3));
+          const sx = cx + Math.cos(a) * R;
+          const sy = cy + Math.sin(a) * R;
+          ctx.beginPath();
+          ctx.arc(sx, sy, 2 * pulse, 0, Math.PI * 2);
+          ctx.fillStyle = C.spark + (0.6 * pulse) + ')';
+          ctx.fill();
+        }
+
+        /* ── 16. BREATHING outer breath ring ── */
+        const breathScale = 1 + 0.012 * Math.sin(T * 1.2);
+        ctx.beginPath();
+        ctx.arc(cx, cy, R * 1.08 * breathScale, 0, Math.PI * 2);
+        ctx.strokeStyle = C.p + '0.06)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(cx, cy, R * 1.16 * breathScale, 0, Math.PI * 2);
+        ctx.strokeStyle = C.p + '0.03)';
+        ctx.lineWidth = 0.5;
+        ctx.stroke();
+
+        t++;
+        raf = requestAnimationFrame(draw);
+      }
+
+      draw();
+
+      /* ── TRANSITIONS ── */
+      window.enterApp = () => {
+        cancelAnimationFrame(raf);
+        document.getElementById('landing-view').style.display = 'none';
+        const agent = document.getElementById('agent-view');
+        agent.style.display = 'flex';
+        agent.offsetHeight;
+        agent.style.opacity = '1';
+        document.body.style.overflow = 'hidden';
+        canvas.style.opacity = '0.3';
+      };
+
+      window.goHome = () => {
+        if (sessionActive) endSession();
+        const agent = document.getElementById('agent-view');
+        agent.style.opacity = '0';
+        setTimeout(() => {
+          document.body.style.overflowY = 'auto';
+          document.getElementById('landing-view').style.display = 'flex';
+          agent.style.display = 'none';
+          canvas.style.opacity = '1';
+          raf = requestAnimationFrame(draw);
+        }, 500);
+      };
+
+      /* ── WEBSOCKET & AUDIO (Dynamic for production) ── */
+      const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const backendHost = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
+        ? location.host
+        : 'api.realtime-voice-ai.adityazala.dev';
+      const WS_URL = `${wsProtocol}//${backendHost}/ws/agent`;
+
+      const agentContainer = document.getElementById('agent-view');
+      const statusBadge = document.getElementById("statusBadge");
+      const subtitle = document.getElementById("subtitle");
+      const sessionBtn = document.getElementById("sessionBtn");
+      const conversation = document.getElementById("conversation");
+      const sheet = document.getElementById("bottomSheet");
+      const overlay = document.getElementById("sheetOverlay");
+
+      let ws = null, sessionActive = false;
+      let audioCtx = null, micStream = null, audioNode = null;
+      let audioEl = null, mediaSource = null, sourceBuffer = null;
+      let bufferQueue = [], isAppending = false, streamDone = false;
+      let currentBotBubble = null, currentBotBubbleText = "";
+
+      function setUIState(stateClass, badgeText, subtitleHtml) {
+        agentContainer.className = `state-${stateClass}`;
+        statusBadge.textContent = badgeText;
+        if (subtitleHtml !== undefined) {
+          subtitle.style.opacity = '0';
+          setTimeout(() => {
+            subtitle.innerHTML = subtitleHtml;
+            subtitle.style.opacity = '1';
+          }, 300);
+        }
+      }
+
+      /* ── SUBTITLE MANAGER ── */
+      const SubtitleManager = {
+        queue: [],
+        isProcessing: false,
+        currentTimeout: null,
+
+        add(text) {
+          this.queue.push(text);
+          if (!this.isProcessing) this.process();
+        },
+
+        async process() {
+          if (this.queue.length === 0) {
+            this.isProcessing = false;
+            return;
+          }
+          this.isProcessing = true;
+          const text = this.queue.shift();
+
+          // Fade out
+          subtitle.style.opacity = '0';
+          subtitle.style.transform = 'translateY(10px)';
+
+          await new Promise(r => setTimeout(r, 300));
+
+          subtitle.innerHTML = `<b>Agent</b> ${text}`;
+          subtitle.style.transform = 'translateY(0)';
+          subtitle.style.opacity = '1';
+
+          // Minimum display time based on length (approx 15 chars per second)
+          const displayTime = Math.max(2000, text.length * 60);
+
+          this.currentTimeout = setTimeout(() => this.process(), displayTime);
+        },
+
+        clear() {
+          this.queue = [];
+          this.isProcessing = false;
+          if (this.currentTimeout) clearTimeout(this.currentTimeout);
+          subtitle.style.opacity = '0';
+          setTimeout(() => { subtitle.innerHTML = ""; }, 300);
+        }
+      };
+
+      function triggerHaptic(d = 50) { if (navigator.vibrate) try { navigator.vibrate(d); } catch (e) { } }
+
+      window.toggleSheet = (forceState) => {
+        const isOpen = sheet.classList.contains('open');
+        const next = forceState !== undefined ? forceState : !isOpen;
+        if (!next) { sheet.classList.remove('open'); overlay.classList.remove('active'); sheet.style.transform = ''; }
+        else { sheet.classList.add('open'); overlay.classList.add('active'); scrollBottom(); }
+      };
+
+      let startY = 0, currentY = 0, isDragging = false;
+      document.querySelector('.sheet-handle').addEventListener('touchstart', e => { startY = e.touches[0].clientY; isDragging = true; sheet.classList.add('no-transition'); }, { passive: true });
+      window.addEventListener('touchmove', e => { if (!isDragging) return; currentY = e.touches[0].clientY; const d = currentY - startY; if (d > 0) sheet.style.transform = `translateY(${d}px)`; }, { passive: false });
+      window.addEventListener('touchend', () => { if (!isDragging) return; isDragging = false; sheet.classList.remove('no-transition'); if (currentY - startY > 100) toggleSheet(false); else sheet.style.transform = ''; startY = 0; currentY = 0; });
+
+      const generateWorkletUrl = () => { const code = `class PCMProcessor extends AudioWorkletProcessor{constructor(){super();this.bufferSize=512;this.buffer=new Float32Array(this.bufferSize);this.offset=0;}process(inputs,outputs,parameters){const input=inputs[0];if(!input||!input[0])return true;const channel=input[0];for(let i=0;i<channel.length;i++){this.buffer[this.offset++]=channel[i];if(this.offset===this.bufferSize){this.port.postMessage(this.buffer);this.offset=0;this.buffer=new Float32Array(this.bufferSize);}}return true;}}registerProcessor('pcm-processor',PCMProcessor);`; return URL.createObjectURL(new Blob([code], { type: 'application/javascript' })); };
+
+      function getAudioEl() { if (!audioEl) { audioEl = document.createElement('audio'); audioEl.style.display = 'none'; document.body.appendChild(audioEl); audioEl.addEventListener('playing', () => { setUIState('speaking', 'Speaking', 'Listening to response'); if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'playback_started' })); }); audioEl.addEventListener('ended', () => { if (sessionActive && agentContainer.className.includes('state-speaking')) setUIState('listening', 'Listening', 'Go ahead, I am listening...'); if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'playback_ended' })); }); } return audioEl; }
+
+      function resetMediaSource() { if (mediaSource && mediaSource.readyState === 'open') try { mediaSource.endOfStream(); } catch (_) { } mediaSource = new MediaSource(); sourceBuffer = null; bufferQueue = []; isAppending = false; streamDone = false; const el = getAudioEl(); el.src = URL.createObjectURL(mediaSource); el.addEventListener('canplay', function onCan() { el.removeEventListener('canplay', onCan); el.play().catch(() => { }); }); mediaSource.addEventListener('sourceopen', () => { const mime = 'audio/mpeg'; if (!MediaSource.isTypeSupported(mime)) return; sourceBuffer = mediaSource.addSourceBuffer(mime); sourceBuffer.mode = 'sequence'; sourceBuffer.addEventListener('updateend', () => { isAppending = false; flushQueue(); }); flushQueue(); }, { once: true }); }
+
+      function flushQueue() { if (isAppending || !sourceBuffer || sourceBuffer.updating) return; if (bufferQueue.length === 0) { if (streamDone && mediaSource && mediaSource.readyState === 'open') try { mediaSource.endOfStream(); } catch (_) { } return; } isAppending = true; sourceBuffer.appendBuffer(bufferQueue.shift()); }
+
+      function appendAudioChunk(b64) { const bin = atob(b64), bytes = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++)bytes[i] = bin.charCodeAt(i); bufferQueue.push(bytes.buffer); flushQueue(); }
+
+      function stopAudio() { if (audioEl) { audioEl.pause(); audioEl.src = ''; } mediaSource = null; sourceBuffer = null; bufferQueue = []; isAppending = false; streamDone = false; }
+
+      function addUserBubble(text) { finalizeBotBubble(); const turn = document.createElement("div"); turn.className = "turn user"; turn.innerHTML = `<div class="bubble">${esc(text)}</div>`; conversation.appendChild(turn); scrollBottom(); }
+
+      function getOrCreateBotBubble() { if (currentBotBubble) return currentBotBubble; const turn = document.createElement("div"); turn.className = "turn bot"; const bubble = document.createElement("div"); bubble.className = "bubble streaming"; bubble.innerHTML = `<div class="bubble-text"></div>`; turn.appendChild(bubble); conversation.appendChild(turn); currentBotBubble = bubble; currentBotBubbleText = ""; scrollBottom(); return bubble; }
+
+      function appendBotText(text) {
+        const bubble = getOrCreateBotBubble();
+        currentBotBubbleText += (currentBotBubbleText ? " " : "") + text;
+        bubble.querySelector(".bubble-text").textContent = currentBotBubbleText;
+        // subtitle.innerHTML=`<b>Agent</b> ${currentBotBubbleText}`; // No longer updating directly here
+        SubtitleManager.add(text);
+        scrollBottom();
+      }
+
+      function finalizeBotBubble() { if (!currentBotBubble) return; currentBotBubble.classList.remove("streaming"); currentBotBubble = null; currentBotBubbleText = ""; }
+
+      window.clearConversation = () => { conversation.innerHTML = ""; stopAudio(); };
+
+      function scrollBottom() { conversation.scrollTop = conversation.scrollHeight; }
+      function esc(s) { const d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
+
+      function connectWS() { ws = new WebSocket(WS_URL); ws.binaryType = "arraybuffer"; ws.onopen = () => { setUIState('listening', 'Connected', 'Go ahead, I am listening...'); sessionBtn.textContent = "End Session"; sessionBtn.classList.add("active"); triggerHaptic([50, 50, 50]); }; ws.onmessage = e => handleMsg(JSON.parse(e.data)); ws.onerror = () => { setUIState('idle', 'Error', 'Connection failed. Check network.'); sessionBtn.textContent = "Start Session"; sessionBtn.classList.remove("active"); }; ws.onclose = () => { if (sessionActive) endSession(); }; }
+
+      function handleMsg(msg) { switch (msg.type) { case "speech_start": setUIState('listening', 'Hearing You', '<i>Listening...</i>'); stopAudio(); finalizeBotBubble(); break; case "processing": setUIState('processing', 'Thinking', '...'); break; case "transcript": resetMediaSource(); addUserBubble(msg.text); setUIState('processing', 'Thinking', '...'); break; case "bot_text": if (!agentContainer.className.includes('state-speaking')) { setUIState('speaking', 'Speaking', msg.text); triggerHaptic(30); } appendBotText(msg.text); break; case "audio_chunk": appendAudioChunk(msg.audio); break; case "interrupted": stopAudio(); finalizeBotBubble(); SubtitleManager.clear(); setUIState('listening', 'Listening', 'Go ahead...'); break; case "done": streamDone = true; flushQueue(); finalizeBotBubble(); break; case "idle": setUIState('listening', 'Listening', 'Go ahead, I am listening...'); break; case "error": setUIState('idle', 'Error', msg.message); break; } }
+
+      async function startStreaming() { audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 }); if (audioCtx.state === 'suspended') await audioCtx.resume(); micStream = await navigator.mediaDevices.getUserMedia({ audio: { sampleRate: 16000, channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: false }); const workletUrl = generateWorkletUrl(); await audioCtx.audioWorklet.addModule(workletUrl); const source = audioCtx.createMediaStreamSource(micStream); audioNode = new AudioWorkletNode(audioCtx, 'pcm-processor'); audioNode.port.onmessage = (e) => { if (!ws || ws.readyState !== WebSocket.OPEN) return; ws.send(e.data.buffer); }; source.connect(audioNode); audioNode.connect(audioCtx.destination); }
+
+      function stopStreaming() { if (audioNode) { audioNode.disconnect(); audioNode = null; } if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; } if (audioCtx) { audioCtx.close(); audioCtx = null; } }
+
+      async function toggleSession() { if (sessionActive) { endSession(); return; } try { sessionBtn.textContent = "Connecting..."; subtitle.innerHTML = "Requesting microphone..."; await startStreaming(); connectWS(); sessionActive = true; } catch (err) { console.error(err); setUIState('idle', 'Offline', 'Microphone access denied or failed.'); sessionBtn.textContent = "Start Session"; sessionBtn.classList.remove("active"); alert("Microphone error. Are you on HTTPS? " + err.message); } }
+
+      function endSession() { stopStreaming(); stopAudio(); if (ws) { ws.close(); ws = null; } finalizeBotBubble(); SubtitleManager.clear(); sessionActive = false; sessionBtn.textContent = "Start Session"; sessionBtn.classList.remove("active"); setUIState('idle', 'Offline', 'Session ended. Tap to restart.'); }
+
+      window.toggleSession = toggleSession;
+    })();
+  </script>
+</body>
+
+</html>
