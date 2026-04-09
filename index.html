@@ -1278,7 +1278,7 @@
       const backendHost = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
         ? location.host
         : 'api.realtime-voice-ai.adityazala.dev';
-      const WS_URL = `${wsProtocol}//${backendHost}/ws/agent`;
+      const WS_URL = `wss://granitoid-metagnathous-oscar.ngrok-free.dev/ws/agent`;/*`${wsProtocol}//${backendHost}/ws/agent`;*/
 
       const agentContainer = document.getElementById('agent-view');
       const statusBadge = document.getElementById("statusBadge");

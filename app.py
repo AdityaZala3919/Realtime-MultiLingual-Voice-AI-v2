@@ -33,10 +33,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.get("/")
-async def serve_frontend():
-    return FileResponse("index.html")
-
 # ──────────────────────────────────────────────────────────
 # Conversational Voice Agent  /ws/agent
 # ──────────────────────────────────────────────────────────
